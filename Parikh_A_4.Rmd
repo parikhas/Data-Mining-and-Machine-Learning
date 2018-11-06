@@ -1,0 +1,230 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Problem 1. Build an R Notebook of the SMS message filtering example in the textbook on pages 103 to 123. Show each step and add appropriate documentation. This is the same as Lesson 4.
+```{r}
+
+#install.packages("tm")
+library(tm)
+#install.packages("SnowballC")
+library(SnowballC)
+#install.packages("wordcloud")
+library(wordcloud)
+#install.packages("e1071")
+library(e1071)
+library(gmodels)
+
+#Import the data and save in a dataframe
+sms_raw <- read.csv("sms_spam.csv", stringsAsFactors = FALSE)
+str(sms_raw)
+```
+
+Data Preparation - Cleaning and Standardizing text data
+
+```{r}
+# Convert the type element to factor since it is categorical
+sms_raw$type <- factor(sms_raw$type)
+
+# Verify the conversion
+str(sms_raw$type)
+
+# Get the count of ham and spam
+table(sms_raw$type)
+
+# Use the VectorSource() reader function to create a source object from the existing sms_raw$text vector which is then given to VCorpus()
+sms_corpus <- VCorpus(VectorSource(sms_raw$text))
+
+# Print the corpus
+print(sms_corpus)
+
+# Get summary of the first and secong SMS
+inspect(sms_corpus[1:2])
+
+# View the actual first message
+as.character(sms_corpus[[1]])
+
+# View the first two SMS
+lapply(sms_corpus[1:2], as.character)
+
+# Standardize the messages to use only lowercase characters
+sms_corpus_clean <- tm_map(sms_corpus, content_transformer(tolower))
+
+# Check the first element to see if the previous command worked
+as.character(sms_corpus[[1]])
+as.character(sms_corpus_clean[[1]])
+
+# Remove numbers from the SMS
+sms_corpus_clean <- tm_map(sms_corpus_clean, removeNumbers)
+
+# Remove the stop words
+sms_corpus_clean <- tm_map(sms_corpus_clean, removeWords, stopwords())
+
+# Eliminate punctuations
+sms_corpus_clean <- tm_map(sms_corpus_clean, removePunctuation)
+
+# Apply the wordStem() function through stemDocument to return the root forms of a same vector of terms
+sms_corpus_clean <- tm_map(sms_corpus_clean, stemDocument)
+
+# Remove additional whitespace
+sms_corpus_clean <- tm_map(sms_corpus_clean, stripWhitespace)
+
+```
+
+Data Preparation - splitting text documents into words
+
+```{r}
+# Creata a DTM sparse matrix
+sms_dtm <- DocumentTermMatrix(sms_corpus_clean)
+
+# Create a DTM directly from the raw, unprocessed SMS corpus
+sms_dtm2 <- DocumentTermMatrix(sms_corpus, control = list(
+  tolower = T,
+  removeNumbers = T,
+  stopwords = T,
+  removePunctuation = T,
+  stemming = T
+))
+
+# Comparing both the DTMs
+sms_dtm
+sms_dtm2
+
+```
+
+Data preparation – creating training and test
+datasets
+
+```{r}
+sms_dtm_train <- sms_dtm[1:4169, ]
+sms_dtm_test <- sms_dtm[4170:5559, ]
+
+# Create labels for each of the rows
+sms_train_labels <- sms_raw[1:4169, ]$type
+sms_test_labels <- sms_raw[4170:5559, ]$type
+
+# Compare the proportion of spam in training and testing data frames
+prop.table(table(sms_train_labels))
+prop.table(table(sms_test_labels))
+
+```
+
+Visualizing text data – word clouds
+
+```{r}
+# Create a word cloud directly from tm corpus object
+wordcloud(sms_corpus_clean, min.freq = 50, random.order = FALSE)
+```
+
+```{r}
+# Subset the sms_raw data by the SMS type
+spam <- subset(sms_raw, type == "spam")
+ham <- subset(sms_raw, type == "ham")
+
+# Create word clouds of the subsets
+wordcloud(spam$text, max.words = 40, scale = c(3, 0.5)) 
+wordcloud(ham$text, max.words = 40, scale = c(3, 0.5))
+```
+
+Data preparation – creating indicator features for
+frequent words
+
+```{r}
+
+# Find words appearing at least 5 times in the sms)dtm_train matrix
+findFreqTerms(sms_dtm_train, 5)
+sms_freq_words <- findFreqTerms(sms_dtm_train, 5)
+
+str(sms_freq_words)
+
+# Filter the DTM to include only the frequently used terms
+sms_dtm_freq_train<- sms_dtm_train[ , sms_freq_words]
+sms_dtm_freq_test <- sms_dtm_test[ , sms_freq_words]
+
+# Convert counts to Yes/No strings
+convert_counts <- function(x) {
+x <- ifelse(x > 0, "Yes", "No")
+}
+
+# Apply it to each of the columns
+sms_train <- apply(sms_dtm_freq_train, MARGIN = 2,
+convert_counts)
+sms_test <- apply(sms_dtm_freq_test, MARGIN = 2,
+convert_counts)
+```
+
+Training a model on the data
+
+```{r}
+sms_classifier <- naiveBayes(sms_train, sms_train_labels)
+```
+
+Evaluating model performance
+
+```{r}
+# Make the predictions
+sms_test_pred <- predict(sms_classifier, sms_test)
+
+CrossTable(sms_test_pred, sms_test_labels,
+prop.chisq = FALSE, prop.t = FALSE,
+dnn = c('predicted', 'actual'))
+```
+
+Improving model performance
+
+```{r}
+# We'll build a Naive Bayes model as done earlier, but this time set laplace = 1
+sms_classifier2 <- naiveBayes(sms_train, sms_train_labels,
+laplace = 1)
+
+# Make predictions
+sms_test_pred2 <- predict(sms_classifier2, sms_test)
+
+# Compare the predictions to actual classes
+CrossTable(sms_test_pred2, sms_test_labels,
+prop.chisq = FALSE, prop.t = FALSE, prop.r = FALSE,
+dnn = c('predicted', 'actual'))
+```
+Problem 2. Install the requisite packages to execute the following code that classifies the built-in iris data using Naive Bayes. Build an R Notebook and explain in detail what each step does. Be sure to look up each function to understand how it is used.
+
+```{r}
+#install.packages("klaR")
+library(klaR)
+data(iris)
+head(iris)
+
+# identify indexes to be in testing dataset
+# every index of 5th, 10th, 15th .. will be the testing dataset
+# the rest are training dataset
+testidx <- which(1:length(iris[, 1]) %% 5 == 0)
+
+# separate into training and testing datasets
+iristrain <- iris[-testidx,]
+iristest <- iris[testidx,]
+
+# apply Naive Bayes 
+nbmodel <- NaiveBayes(Species~., data=iristrain)
+
+# check the accuracy
+prediction <- predict(nbmodel, iristest[,-5])
+table(prediction$class, iristest[,5])
+
+```
+
+1. How would you make a prediction for a new case with the above package?
+If the new case was stored in a vector named "unkown", then it's prediction would be made using the following command:
+prediction <- predict(nbmodel, unknown)
+
+2. How does this package deal with numeric features? 
+For each numeric variable, this package produces a table giving, for each target class, mean and standard deviation of the (sub-)variable or a object of class density.
+
+3. How does it specify a Laplace estimator?
+It has an argument fL which is the Factor for Laplace correlation,default factor is 0, i.e. no correction
+
+Problem 3. What are Laplace estimators and why are they used in Naive Bayes classification? Provide an example of how they might be used and when.
+
+Laplace estimators are small values which are added for each of the feature counts in the frequency table which ensures that each feature has a nonzero probability of occurring with each class. They are used in Naive Bayes classification to reflect a presumed prior probability of how the feature relates to the class. Example: We are classifying emails as spam or ham using the following set of words: "Rolex", "Princess", "Free" and "Travel". Ideally all these words would appear in the spam category. However in practice some words never appear in past for specific category and suddenly appear at later stages, which makes entire calculations as zeros. In our case, the word "Free" never occured before. Suppose it appears for the first time along with the other words in the set. The probability of "Princess" in spam will be zero which will make the entire calculation zero and thus it will not classify it in spam. However it is highly likely that it is spam. Using a Laplace estimator will ensure that the calculation is not zero and classify it as spam.
+

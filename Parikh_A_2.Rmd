@@ -1,0 +1,195 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+1. The built-in dataset USArrests contains statistics about violent crime rates in the US States. Determine which states are outliers in terms of assaults. Outliers, for the sake of this question, are defined as values that are more than 1.5 standard deviations from the mean.
+
+Florida, Maryland, North Carolina and North Dakota are the outlier states in terms of assaults
+```{r}
+# Load the data in the working environment
+df = USArrests
+# Remove the rownames and put them in a column names State
+d <- df
+State <- rownames(d)
+rownames(d) <- NULL
+df <- cbind(State,d)
+
+library(dplyr)
+attach(USArrests)
+s <- sd(df$Assault)
+m <- mean(df$Assault)
+z <- m - df$Assault
+z <- z/s
+z <- abs(z)
+mean(z)
+df <- cbind(df,z)
+o <- which(z>1.5)
+o
+f <- df %>% filter(z >= "1.5")
+f
+```
+
+2. For the same dataset as in (1), is there a correlation between murder and assault, i.e., as one goes up, does the other statistic as well? Comment on the strength of the correlation. Calculate the Pearson coefficient of correlation in R.
+
+There is a correlation between murder and assault and it seems to be quite strong.
+The Pearson coefficient of correlation is 0.802
+```{r}
+plot(Murder, Assault)
+cor(Murder, Assault, method = 'pearson')
+cor.test(Murder, Assault)
+```
+
+3. Based on the data on the growth of mobile phone use in Brazil (you'll need to copy the data and create a CSV that you can load into R), forecast phone use for the next time period using a simple moving average, a 3-year weighted moving average (with weights of 4 for the most recent year, and 1 for the others), exponential smoothing (alpha of 0.2), and linear regression trendline
+
+Forecasts of phone use for the next time period are as follows:
+Simple Moving Average :          175848268
+3-year Weighted Moving Average : 189396150
+Exponential Smoothing :          123744469
+Linear Regression trendline :    203610216
+```{r}
+data <- read.csv('Raw Data Mobile Phone Growth (Brazil) - Mobile Phone Subscriptions.csv')
+head(data)
+n <- nrow(data)
+
+# Simple moving average
+last3 <- data[n:(n-2),2]
+SMA <- mean(last3)
+SMA
+
+# 3-year weighted moving average
+last3 <- data[n:(n-2),2]
+last3
+w <- c(4,1,1)
+sw <- w*last3
+sw
+WMA <- sum(sw)/sum(w)
+WMA
+
+# Exponential smoothing
+data$Ft <-0
+data$E<-0
+head(data)
+data$Ft[1] <-data[1,2]
+
+#F(t) = F(t-1) + a*E(t-1)
+a <- 0.2
+data$Ft[2] <- data$Ft[1]+a*data$E[1]
+data$E[2] <- data[2,2]-data$Ft[2]
+for (i in 2:nrow(data)) {
+  data$Ft[i] <- data$Ft[i-1]+a*data$E[i-1]
+  data$E[i] <- data[i,2]-data$Ft[i]
+}
+head(data)
+tail(data)
+ES <- data$Ft[n]+a*data$E[n]
+ES
+
+# Linear Regression Trendline
+model <- lm(data$Subscribers ~ data$Year)
+summary(model)
+print(model)
+TL <- -15710760 + 18276748*(12)
+TL
+
+```
+
+4. Calculate the average mean squared error for each model, i.e., use the model to calculate a forecast for each given time period and then the error.
+
+The average mean squared error for each of the models is as follows:
+Linear Regression Trendline : 1.265347e+14
+Exponential smoothing :       3.166964e+15
+Simple Moving Average :       5.419417e+15
+Weighted Moving Average:      6.12488e+15
+```{r}
+### Linear Regression Trendline
+d.TL <- read.csv('Raw Data Mobile Phone Growth (Brazil) - Mobile Phone Subscriptions.csv')
+head(d.TL)
+# Initializing columns of forecast and absolute error
+d.TL$F<-0
+d.TL$absErr<-0
+tail(d.TL)
+for (i in 1:nrow(d.TL)){
+  d.TL$F[i] <- 18276748*d.TL$Year[i] -15710760
+  d.TL$absErr[i] <-abs(d.TL[i,2]-d.TL$F[i])
+}
+# Making a column for squared error
+d.TL$SqErr <- 0
+# Putting values in the column
+for (i in 1:nrow(d.TL)){
+  d.TL$SqErr[i] <- (d.TL$absErr[i])^2
+}
+head(d.TL)
+# Calculating MSE
+mean(d.TL$SqErr)
+
+### Exponential smoothing
+# Making a column for squared error
+data$SqErr <- 0
+# Putting values in the column
+for (i in 1:nrow(data)){
+  data$SqErr[i] <- (data$E[i])^2
+}
+# Calculating MSE
+mean(data$SqErr)
+
+### Simple moving average (used 2-period to get more forecasts)
+d.SM <- read.csv('Raw Data Mobile Phone Growth (Brazil) - Mobile Phone Subscriptions.csv')
+d.SM$Ft <- 0
+# Forecasting
+for (i in 1:nrow(d.SM)){
+  d.SM$Ft[i] <- sum(d.SM$Subscribers[i-1]+d.SM$Subscribers[i-2])/2
+}
+# Make a new column for Square error and initially put all values 0
+d.SM$SqErr <- 0
+# Calculating mean suare error for the forecasts
+for (i in 3:nrow(d.SM)){ # starting from 3rd row since there are no forecasts for the first 2 rows
+  d.SM$SqErr[i] <- (d.SM$Subscribers-d.SM$Ft[i])^2
+}
+# Taking mean using 9 observations since there are only 9 forecasts
+MSE.SM <- (sum(d.SM$SqErr))/9
+MSE.SM
+
+### Weighted moving average
+d.WM <- read.csv('Raw Data Mobile Phone Growth (Brazil) - Mobile Phone Subscriptions.csv')
+d.WM$Ft <- 0
+wt <- c(1,1,4)
+
+for (i in 1:nrow(d.WM)){
+  sw <- wt*c(d.WM$Subscribers[i:(i+2)])
+  d.WM$Ft[i+3] <- sum(sw)/sum(wt)
+  if (i == nrow(d.WM)-3){
+    break
+  }
+}
+# Make a new column for Square error and initially put all values 0
+d.WM$SqErr <- 0
+for (i in 4:nrow(d.WM)){ # starting from 4th row since there are no forecasts for the first 3 rows
+  d.WM$SqErr[i] <- (d.WM$Ft[i]-d.WM$Subscribers)^2
+}
+# Taking mean using 8 observations since there are only 8 forecasts
+MSE.WM <- (sum(d.WM$SqErr))/8
+MSE.WM
+
+# For calculating the mean squared error(MSE) in this problem, I have only taken in account the years which have a forecast associated with them since professor told us to ignore cases where we could not apply the model.
+# Example: For weighted moving average, I calculated MSE by taking sum of the column containing Squared Error and then divided by 8(number of forecasts and hence number of squared errors) instead of taking mean(which would divide it by 11). I have done the same with simple moving average
+```
+
+5. Which model has the smallest mean squared error (MSE)?
+Linear Regression Trendline has the smallest MSE(1.265347e+14)
+
+6. Calculate a weighted average forecast by averaging out the three forecasts calculated in (3) with the following weights: 3 for trend line, 2 for exponential smoothing, 1 for weighted moving average. Remember to divide by the sum of the weights in a weighted average.
+
+The weighted average forecast by averaging out the three forecasts is 174619289
+```{r}
+forecasts <- c(203610216, 123744469, 189396150)
+wt <- c(3,2,1)
+sw <- wt*forecasts
+sw
+WA <- sum(sw)/sum(wt)
+WA
+```
+
+

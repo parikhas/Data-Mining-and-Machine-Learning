@@ -1,0 +1,133 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+3. Follow this tutorial on applying kNN to prostate cancer detection and implement all of the steps in an R Notebook. Make sure to explain each step and what it does. (Note: The data set provided as part of this assignment has been slightly modified from the one used in the tutorial, so small deviations in the result can be expected.)
+```{r}
+#setwd('~/Documents/ML')
+prc <- read.csv("prostate_cancer.csv",stringsAsFactors = F)
+str(prc)
+```
+
+
+```{r}
+# Remove the first variable(id) as it doesn't give any useful information
+prc <- prc[-1]
+head(prc)
+```
+
+```{r}
+# Get number of patients in each group
+table(prc$diagnosis_result)
+```
+
+```{r}
+# Rename B as”Benign” and M as “Malignant”
+prc$diagnosis <- factor(prc$diagnosis_result, levels = c("B", "M"), labels = c("Benign", "Malignant"))
+# Get the result in the percentage form rounded of to 1 decimal place( and so it’s digits = 1)
+round(prop.table(table(prc$diagnosis)) * 100, digits = 1)  
+head(prc)
+```
+
+```{r}
+# Normalize the data and transform all the values to a common scale
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+prc_n <- as.data.frame(lapply(prc[2:9], normalize))
+# Check whether data has been normalized
+summary(prc_n$radius)
+```
+
+```{r}
+# Create training and test data set
+prc_train <- prc_n[1:65,]
+prc_test <- prc_n[66:100,]
+```
+
+```{r}
+prc_train_labels <- prc[1:65, 1]
+prc_test_labels <- prc[66:100, 1]   #This code takes the diagnosis factor in column 1 of the prc data frame and in turn creates prc_train_labels and prc_test_labels data frame.
+```
+
+```{r}
+# Train the model on data
+#install.packages('class')
+library(class)
+# Use knn() to classify test data
+prc_test_pred <- knn(train = prc_train, test = prc_test,cl = prc_train_labels, k=10)
+```
+
+```{r}
+# Evaluate the model performance
+#install.packages("gmodels")
+library(gmodels)
+CrossTable(x=prc_test_labels, y=prc_test_pred,prop.chisq = F)
+```
+The test data consisted of 35 observations. Out of which 7 cases have been accurately predicted (TN->True Negatives) as Benign (B) in nature. Also, 16 out of 35 observations were accurately predicted (TP-> True Positives) as Malignant (M) in nature. Thus a total of 16 out of 35 predictions where TP i.e, True Positive in nature.
+
+There were no case of False Negatives (FN) meaning no case was recorded which actually was malignant in nature but got predicted as benign.
+
+There were 12 cases of False Positives (FP) meaning 12 cases were actually benign in nature but got predicted as malignant.
+
+The total accuracy of the model is 65.71 %( (TN+TP)/35) which shows that there may be chances to improve the model performance
+
+4. Once you've complete the tutorial, try another kNN implementation from another package, such as the caret package. Compare the accuracy of the two implementations.
+```{r}
+# Since we are comparing the kNN implementation from two packages, I have kept all the steps same for both until training the data on the model. So the training and testing data sets are the same for both in order to compare them more accurately
+prc <- read.csv("prostate_cancer.csv",stringsAsFactors = FALSE)
+prc <- prc[-1] 
+prc$diagnosis <- factor(prc$diagnosis_result, levels = c("B", "M"), labels = c("Benign", "Malignant"))
+round(prop.table(table(prc$diagnosis)) * 100, digits = 1)
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+prc_n <- as.data.frame(lapply(prc[2:9], normalize))
+summary(prc_n$radius)
+library(dplyr)
+prc_n <- bind_cols(diagnosis = prc$diagnosis, prc_n)
+prc_train <- prc_n[1:65,]
+prc_test <- prc_n[66:100,]
+prc_train
+prc_test
+```
+
+```{r}
+library(caret)
+trnctrl_df3 <- trainControl(method = "cv", number = 10)
+model_knn_df3 <- train(diagnosis ~., data = prc_train, method = "knn", 
+                       trControl = trnctrl_df3, 
+                       tuneLength = 10)
+
+model_knn_df3
+
+```
+
+```{r}
+predict_knn_df3 <- predict(model_knn_df3, prc_test)
+confusionMatrix(predict_knn_df3, prc_test$diagnosis, positive = "Malignant")
+```
+The accuracy using kNN implementation from the caret package is 0.6 (60%)
+
+The test data consisted of 35 observations. Out of which 5 cases have been accurately predicted (TN->True Negatives) as Benign (B) in nature. Also, 16 out of 35 observations were accurately predicted (TP-> True Positives) as Malignant (M) in nature. Thus a total of 16 out of 35 predictions where TP i.e, True Positive in nature.
+
+There was no case of False Negatives (FN) meaning no case was recorded which actually was malignant in nature but got predicted as benign.
+
+There were 14 cases of False Positives (FP) meaning 14 cases were actually benign in nature but got predicted as malignant.
+
+The True Positives and False Negatives were same using both the package. Since False Positives were lower using class, the accuracy of kNN can be said to be higher when class package was used.
+
+5. Try the confusionMatrix function from the caret package to determine the accuracy of both algorithms.
+```{r}
+# kNN using caret
+confusionMatrix(predict_knn_df3, prc_test$diagnosis, positive = "Malignant")
+```
+
+```{r}
+# kNN using class
+prc_test_labels <- as.factor(prc_test_labels)
+confusionMatrix(prc_test_pred, prc_test_labels, positive = "M")
+```
+Having used the same training and test data for both the algorithms, the accuracy given by the confusion matrix is almost the same. The false negatives and true positives are the same by both the packages. Since true positives are higher and false positives are lower using class, hence the kNN implementation of class package can be said to have a better accuracy among both the models.
+
