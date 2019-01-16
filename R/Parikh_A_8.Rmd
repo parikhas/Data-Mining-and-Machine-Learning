@@ -1,0 +1,186 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Problem 1 (50 Points)
+
+Build an R Notebook of the social networking service example in the textbook on pages 296 to 310. Show each step and add appropriate documentation.
+
+Step 1 - Exploring and preparing the data
+```{r}
+teens <- read.csv("snsdata.csv")
+str(teens)
+table(teens$gender)
+# Since the previous command doesn't show the no. of NA, specify that the table show the NA if they are present
+table(teens$gender, useNA = "ifany")
+summary(teens$age)
+# If the age is not between the range of 13 - 19, then put NA in its place
+teens$age <- ifelse(teens$age >=13 & teens$age < 20, teens$age, NA)
+summary(teens$age)
+```
+
+Data preparation – dummy coding missing values
+```{r}
+teens$female <- ifelse(teens$gender == "F" & !is.na(teens$gender),1,0)
+teens$no_gender <- ifelse(is.na(teens$gender),1,0)
+str(teens)
+table(teens$gender, useNA = "ifany")
+table(teens$female, useNA = "ifany")
+table(teens$no_gender, useNA = "ifany")
+```
+
+Data preparation – imputing the missing values
+```{r}
+mean(teens$age)
+mean(teens$age, na.rm = T)
+# Calculate the mean age by graduation year after removing the NA values
+aggregate(data = teens, age ~ gradyear, mean, na.rm = T)
+```
+
+```{r}
+ave_age <- ave(teens$age, teens$gradyear, FUN = function(x) mean(x, na.rm = T))
+table(ave_age)
+```
+
+```{r}
+teens$age <- ifelse(is.na(teens$age), ave_age, teens$age)
+summary(teens$age)
+```
+
+Step 2 – training a model on the data
+
+```{r}
+library(stats)
+# Only consider the 36 features that represent the interest of teens
+interests <- teens[5:40]
+# Apply z score standardization
+interests_z <- as.data.frame(lapply(interests, scale))
+# Use k-means algorithm to divide the teenager's interest data into 5 clusters
+set.seed(2345)
+teen_clusters <- kmeans(interests_z,5)
+```
+
+Step 3 - evaluating model performance
+
+```{r}
+# Obtain the size of the kmeans clusters
+teen_clusters$size
+# Examine the coordinates of the cluster centroids
+teen_clusters$centers
+```
+
+Step 5 – improving model performance
+
+```{r}
+# Add the clusters as a column on the teens data frame
+teens$cluster <- teen_clusters$cluster
+# Examine how the cluster assignment relates to the individual characteristics
+teens[1:5, c("cluster", "gender", "age", "friends")]
+# Look at the demographic characteristics of the clusters
+aggregate(data = teens, age ~ cluster, mean)
+aggregate(data = teens, female ~ cluster, mean)
+aggregate(data = teens, friends ~ cluster, mean)
+```
+Problem 2 (50 Points)
+
+Provide 100-300 word answers to each of the following interview questions:
+
+1. (10 Points) What are various ways to predict a binary response variable? Can you compare two of them and tell me when one would be more appropriate? What’s the difference between these? (SVM, Logistic Regression, Naive Bayes, Decision Tree, etc.)
+
+A binary response variable can be predicted by using the following algorithms:
+knn
+Naive Bayes
+Logistic Regression
+Decision Tree
+Random Forest
+SVM
+Neural Network
+
+Comparing knn and decision tree:
+
+Decision Tree comes under the category of "Eager Learners", because it first builds a classification model on the training dataset before being able to actually classify an unseen observation from test dataset. 
+The KNN-based classifier comes under the category of "Lazy Learner". It does not build any classification model. It directly learns from the training instances (observations). It starts processing data only after it is given a test observation to classify.
+Since KNN performs instance-based learning, a well-tuned K can model complex decision spaces having arbitrarily complicated decision boundaries
+which is not easily modeled by decision trees.
+Decision tree excludes unimportant features so it would work better on a dataset which has a large number of features than knn since it cannot exclude any features.
+
+
+Difference between the following:
+
+SVM: It  creates a flat boundary called a hyperplane between points of data plotted in multidimensional space to create fairly homogeneous partitions that represent examples and their feature values. 
+
+Logistic Regression: It explains the relationship between one dependent binary variable and one or more independent variables. The logistic regression works by estimating probabilities using a logistic function.
+
+Naive Bayes: It is based on Bayesian methods to determine empirical probabilities of each outcome based on frequencies of feature values.
+When the classifier is then applied to unlabeled cases, it uses the empirical probabilities to predict the most
+likely class for the new case.
+
+Decision Tree: It utilizes a tree structure to model the relationships among the features and the potential outcomes. It splits the data into
+subsets, which are then split repeatedly into even smaller subsets, and so on and so forth until the process stops when the algorithm determines the data within the subsets are sufficiently homogenous.
+
+2. (10 Points) Why might it be preferable to include fewer predictors over many?
+
+There are many reasons why it might be preferable to include fewer predictors over many:
+
+1. Redundancy: When we use a lot of predictors, there is a high chance that there are hidden relationships between some of them which leads to redundany. 
+If the redundant features are not identified early on, it can be a huge drag on the succeeding steps of the data analysis.
+
+2. Irrelevance: It is quite likely that all the predictors do not have a considerable impact on the dependent variable. So, it is important to remove the irrelevant features before data modeling. 
+
+3. Overfitting: Even when a large number of predictor variables do not have any relationships between them, it is still preferred to work with fewer predictors. When the data has a large number of predictors, the models often suffer from the problem of overfitting. In overfitting, the model works really well on the training data but performs poorly on the testing data. Therefore, it is a good idea to work with fewer predictors (shortlisted through feature selection or developed through feature extraction). Focusing on those 20% most significant predictor variables will be of great help in building data models with considerable success rate in a reasonable time, without needing non-practical amount of data or other resources.
+
+4. Understandability: Models with fewer predictors are easier to understand and explain. As the data science steps are performed by humans and the results will be presented used by humans, it is important to consider the comprehensive ability of human brain. This is basically a trade-off – letting go of some potential benefits to the data model’s success rate, while simultaneously making it easier to understand and optimize.
+
+
+3. (10 Points) Given a database of all previous alumni donations to your university, how would you predict which recent alumni are most likely to donate?
+
+Provided that the database of all previous alumni donations have enough demographic data on its alumni so as to represent indicative predictors such as age, major, address, salary etc, I would consider logistic regression to predict which recent alumni are most likely to donate. 
+
+Once we have good predictors, logistic regression can be used since it can effectively measure the relationship between the categorical dependent variable, which would be likely to donate or not, and one or more independent variables. 
+
+The logistic regression works by estimating probabilities using a logistic function, which is the cumulative logistic distribution. So once we have the most important features for the previous alumni donations, we can make a logistic regression model which would be helpful for prediction of donations by recent alumni.
+
+
+4. (10 Points) What is R-Squared? What are some other metrics that could be better than R-Squared and why?
+
+R-squared is a statistical measure of how close the data are to the fitted regression line. It is also known as the coefficient of determination, or the coefficient of multiple determination for multiple regression. R-squared is the percentage of the response variable variation that is explained by a linear model.
+
+Some other metrics that could be better than R-Squared are:
+
+1. Ajusted R-squared: The adjusted R-squared is a modified version of R-squared that has been adjusted for the number of predictors in the model. The adjusted R-squared increases only if the new term improves the model more than would be expected by chance. It decreases when a predictor improves the model by less than expected by chance. 
+
+2. Akaike information criterion(AIC): The Akaike information criterion (AIC) is an estimator of the relative quality of statistical models for a given set of data. AIC is founded on information theory. When a statistical model is used to represent the process that generated the data, the representation will almost never be exact; so some information will be lost by using the model to represent the process. AIC estimates the relative information lost by a given model: the less information a model loses, the higher the quality of that model. (In making an estimate of the information lost, AIC deals with the trade-off between the goodness of fit of the model and the simplicity of the model.)
+
+3. The F-test: It evaluates the null hypothesis that all regression coefficients are equal to zero versus the alternative that at least one is not. An equivalent null hypothesis is that R-squared equals zero. A significant F-test indicates that the observed R-squared is reliable and is not a spurious result of oddities in the data set. Thus the F-test determines whether the proposed relationship between the response variable and the set of predictors is statistically reliable and can be useful when the research objective is either prediction or explanation.
+
+4. RMSE: The RMSE is the square root of the variance of the residuals. It indicates the absolute fit of the model to the data–how close the observed data points are to the model’s predicted values. Whereas R-squared is a relative measure of fit, RMSE is an absolute measure of fit. As the square root of a variance, RMSE can be interpreted as the standard deviation of the unexplained variance, and has the useful property of being in the same units as the response variable. Lower values of RMSE indicate better fit. RMSE is a good measure of how accurately the model predicts the response, and it is the most important criterion for fit if the main purpose of the model is prediction.
+
+5. (10 Points) How can you determine which features are the most important in your model?
+
+There are many ways to determine which features are the most important in your model:
+
+1. Pearson’s Correlation: It is used as a measure for quantifying linear dependence between two continuous variables X and Y. We can check the correlation of different features with the dependent feature to select the ones with the highest correlation.
+
+2. LDA: Linear discriminant analysis is used to find a linear combination of features that characterizes or separates two or more classes (or levels) of a categorical variable.
+
+3. ANOVA: ANOVA stands for Analysis of variance. It is similar to LDA except for the fact that it is operated using one or more categorical independent features and one continuous dependent feature. It provides a statistical test of whether the means of several groups are equal or not.
+
+4. Chi-Square: It is a is a statistical test applied to the groups of categorical features to evaluate the likelihood of correlation or association between them using their frequency distribution.
+
+5. Stepwise regression: It is a method of fitting regression models in which the choice of predictive variables is carried out by an automatic procedure. In each step, a variable is considered for addition to or subtraction from the set of explanatory variables based on some prespecified criterion such a p-value, AIC, adjusted R-squared. 
+
+
+References:
+
+https://www.kdnuggets.com/2017/02/17-data-science-interview-questions-answers.html/2
+http://blog.minitab.com/blog/adventures-in-statistics-2/regression-analysis-how-do-i-interpret-r-squared-and-assess-the-goodness-of-fit
+https://da5030.weebly.com/unit-07--regression.html
+https://www.quora.com/Given-a-database-of-all-previous-alumni-donations-to-your-university-how-would-you-predict-which-recent-alumni-are-more-likely-to-donate
+https://en.wikipedia.org/wiki/Akaike_information_criterion
+https://www.theanalysisfactor.com/assessing-the-fit-of-regression-models/
+https://www.analyticsvidhya.com/blog/2016/12/introduction-to-feature-selection-methods-with-an-example-or-how-to-select-the-right-variables/
+https://en.wikipedia.org/wiki/Stepwise_regression
+https://datascience.stackexchange.com/questions/9228/decision-tree-vs-knn

@@ -1,0 +1,109 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+Submitted by: Ashmi Parikh
+DA5030 Data Mining and Machine Learning, Fall2018
+
+1. (5 pts) Locate the data set and load the data into R.
+```{r}
+df = read.csv('customertxndata.csv', header = F)
+colnames(df) <- c("Visits","Transactions","OS","Sex","Revenue")
+head(df)
+```
+
+2. (10 pts) Calculate the following summative statistics: total number of cases, mean number of visits, median revenue, maximum and minimum number of transactions, most commonly used operating system. Exclude any cases where there is a missing value.
+```{r}
+#Total number of cases
+nrow(df)
+#Total number of cases is 22799
+
+# Mean number of visits
+mean(df$Visits, na.rm = T)
+# Mean number of visits is 12.48
+
+# Median revenue
+median(df$Revenue, na.rm = T)
+# Median revenue is 344.65
+
+# Max transactions
+max(df$Transactions, na.rm = T)
+# Maximum number of transactions is 2
+
+# Min transactions
+min(df$Transactions, na.rm = T)
+# Minimum number of transactions is 0
+
+# Most commonly used OS
+sum(df$OS == "iOS")
+sum(df$OS =="Android")
+# Android is the most commonly used OS
+```
+
+3. (15 pts) Create a scatterplot of number of visits (x-axis) versus revenue (y-axis). Comment on the correlation between the two variables.
+
+```{r}
+plot(df$Visits,df$Revenue, pch = 19, xlab = "Visits", ylab = "Revenue")
+```
+
+4. (10 pts) Which columns have missing data? How did you recognize them? How would you impute missing values?
+
+Columns containing transactions and sex have missing data
+We can use the na.fail() function to check if a data frame contains missing values. If it contains any, the function returns an error, otherwise its output is the same as input.
+I would impute missing values for transactions by mean and sex by mode
+```{r}
+#any(is.na(df$Sex) TA recommended to use this
+#na.fail(df$Visits)
+#na.fail(df$Transactions)
+#na.fail(df$OS)
+#na.fail(df$Sex)
+#na.fail(df$Revenue)
+```
+
+5. (15 pts) Impute missing transaction and gender values.
+```{r}
+summary(df)
+# Imputing missing values in transaction by the mean of transactions
+df$Transactions[is.na(df$Transactions)] = 0.993
+# Imputing missing gender values by mode of gender
+df$Sex[is.na(df$Sex)] = 'Male'
+```
+
+6. (20 pts) Split the data set into two equally sized data sets where one can be used for training a model and the other for validation. Take every odd numbered case and add them to the training data set and every even numbered case and add them to the validation data set, i.e., row 1, 3, 5, 7, etc. are training data while rows 2, 4, 6, etc. are validation data.
+```{r}
+library(dplyr)
+# Taking odd numbered case and adding to training dataset
+training <- df %>% dplyr::filter(row_number() %% 2 == 1) 
+# Taking even numbered case and adding to validation dataset
+validation <- df %>% dplyr::filter(row_number() %% 2 == 0) 
+```
+
+7. (10 pts) Calculate the mean revenue for the training and the validation data sets and compare them. Comment on the difference.
+
+The mean revenue for the training set is 449.61 and for the validation set, it is 460.25.
+There is very little difference between the mean revenue for the training and the validation data sets.
+```{r}
+mean(training$Revenue)
+mean(validation$Revenue)
+```
+
+8. (15 pts) For many data mining and machine learning tasks, there are packages in R. Find at least one package that has functions for creating training and validation data subsets and show how to use them.
+
+One of the most popular packages in R for data mining and machine learning tasks is "caret". It has a function 'createDataPartition' for creating training and validation data subsets. Here I have used it to illustrate how it can be used for the iris dataset which is in-built in R
+```{r}
+#install.packages("caret")
+library(caret)
+# Here, p=0.75 indicates that approxiamtely 75% of the rows from each species are used to make up the inTraining subset
+inTraining <- createDataPartition(y=iris$Species, p=0.75, list=FALSE)
+# Create a training data subset from the inTraining subset
+training_iris <- iris[ inTraining,]
+# Create a validation data subset excluding the inTraining subset
+validation_iris  <- iris[-inTraining,]
+```
+
+
+
+
+

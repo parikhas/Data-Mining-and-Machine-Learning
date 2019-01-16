@@ -1,0 +1,785 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Problem 1  (60 Points)
+1. (0 pts) Download the data set Census Income Data for Adults along with its explanation. Note that the data file does not contain header names; you may wish to add those. The description of each column can be found in the data set explanation. 
+```{r}
+library(caret)
+library(dplyr)
+#setwd('~/Documents/ML/')
+df <- read.csv("adult.data.txt", header =  F)
+colnames(df) <- c("Age","Workclass","fnlwgt","Education","Ed-num","Marital-status","Occupation","Relationship","Race","Sex","Capital-gain","Capital-loss","Hours/week","Native","Class")
+```
+
+2. (0 pts) Explore the data set as you see fit and that allows you to get a sense of the data and get comfortable with it. Is there distributional skew in any of the features? Is there a need to apply a transform? 
+
+Yes, there is a distribution skew in Age, fnlwgt, Education numbers, Capital loss and capital gain. If we were going to use those features, they would have to be normalized and then converted to categorical features by binning. But since we are not going to use them for modeling, there isn't any need to transform them.
+```{r}
+hist(df$Age)
+hist(df$fnlwgt)
+hist(df$`Ed-num`)
+hist(df$`Capital-gain`)
+hist(df$`Capital-loss`)
+hist(df$`Hours/week`)
+
+table(df$Workclass, df$Class)
+table(df$Education)
+table(df$`Marital-status`)
+table(df$Occupation)
+table(df$Relationship)
+table(df$Race)
+table(df$Sex)
+table(df$Native)
+table(df$Class)
+
+# Many of the columns have "?" instead of values. They are missing values and will have to be imputed. Since we are dealing with categorical variables, imputation will be done by mode. 
+
+# Making function of mode  
+mode <- function(x){
+  uniq <- unique(x)
+  uniq[which.max(tabulate(match(x,uniq)))]
+}
+
+# First convert ? to NA
+df[df == " ?"] <- NA
+
+# Now replace with mode
+df$Workclass[which(is.na(df$Workclass))] <- mode(df$Workclass)
+df$Occupation[which(is.na(df$Occupation))] <- mode(df$Occupation)
+df$Native[which(is.na(df$Native))] <- mode(df$Native)
+```
+
+3. (10 pts) Create a frequency and then a likelihood table for the categorical features in the data set. Build your own Naive Bayes classifier for those features.
+```{r}
+# Creating frequency tables for all the features
+
+WC <- table(df$Workclass, df$Class)
+WC <- unclass(WC)
+Ed <- unclass(table(df$Education, df$Class))
+MS <- unclass(table(df$`Marital-status`, df$Class))
+OC <- unclass(table(df$Occupation, df$Class))
+Rel <- unclass(table(df$Relationship, df$Class))
+Race <- unclass(table(df$Race, df$Class))
+Sex <- unclass(table(df$Sex, df$Class))
+NT <- unclass(table(df$Native,df$Class))
+
+calc <- function(data, c1, c2){
+  df <- data
+  for(i in 1:nrow(df)){
+    c1[i] <- data[i,2]/sum(data[i,1],data[i,2])
+    c2[i] <- data[i,1]/sum(data[i,1],data[i,2])
+  }
+  df <- cbind(data,c1,c2)
+  colnames(df)[3] <- ">50K_ll"
+  colnames(df)[4] <- "<=50K_ll"
+}
+freq <- function(data){
+  c1 <- nrow(data)
+  c2 <- nrow(data)
+  calc(data,c1,c2)
+}
+
+# Adding likelihood to the frequency tables 
+
+WC_l <- freq(WC)
+Ed_l <-freq(Ed)
+MS_l <- freq(MS)
+OC_l <- freq(OC)
+Rel_l <- freq(Rel)
+Race_l <- freq(Race)
+Sex_l <- freq(Sex)
+NT_l <- freq(NT)
+
+# Transforming the data to display the levels of features as columns and Class as Rows
+WC_l <- t(WC_l)
+Ed_l <-t(Ed_l)
+MS_l <- t(MS_l)
+OC_l <- t(OC_l)
+Rel_l <- t(Rel_l)
+Race_l <- t(Race_l)
+Sex_l <- t(Sex_l)
+NT_l <- t(NT_l)
+
+# Converting to dataframes
+WC_l <- as.data.frame(WC_l)
+Ed_l <- as.data.frame(Ed_l)
+MS_l <- as.data.frame(MS_l)
+OC_l <- as.data.frame(OC_l)
+Rel_l <- as.data.frame(Rel_l)
+Race_l <- as.data.frame(Race_l)
+Sex_l <- as.data.frame(Sex_l)
+NT_l <- as.data.frame(NT_l)
+
+# Probability of class being >50 or <=50K
+t50 <- as.data.frame(unclass(table(df$Class)))
+pg50 <- t50[2,1]/sum(t50[1,1],t50[2,1])
+pl50 <- t50[1,1]/sum(t50[1,1],t50[2,1])
+
+# Build Naive Bayes Classifier for all the categorical features
+
+naivebayes<-function(workclass,column,education,column1,occupation,column2,maritalstatus,
+                     column3,relationship,column4,race,column5,sex,column6,nativecountry,column7)
+  # the values in function are the likelihood tables of different features and the column which represents a value for that feature having probability of either of the two classes
+{
+  wg<-workclass[3,column]  # probability of workclass of the case having income >50k  
+  wl<-workclass[4,column]  # probability of workclass of the case having income <=50k  
+    
+  eg<-education[3,column1] # probability of education of the case having income >50k 
+  el<-education[4,column1] # probability of education of the case having income <=50k 
+    
+  og<-occupation[3,column2]  # probability of the occupation of the case having income >50k 
+  ol<-occupation[4,column2] # probability of the occupation of the case having income <=50k 
+   
+  mg<-maritalstatus[3,column3]  # probability of the maritalstatus of the case having income >50k 
+  ml<-maritalstatus[4,column3] # probability of the maritalstatus of the case having income <=50k 
+    
+  rg<-relationship[3,column4] # probability of the relationship of the case having income >50k 
+  rl<-relationship[4,column4] # probability of the relationship of the case having income <=50k 
+   
+  rcg<-race[3,column5] # probability of the race of the case having income >50k 
+  rcl<-race[4,column5] # probability of the race of the case having income <=50k 
+    
+  sg<-sex[3,column6] # probability of the sex of the case having income >50k 
+  sl<-sex[4,column6] # probability of the sex of the case having income <=50k 
+   
+  ng<-nativecountry[3,column7] # probability of the native country of the case having income >50k 
+  nl<-nativecountry[4,column7] # probability of the native country of the case having income <=50k 
+    
+  lik_g50<-c(wg,eg,og,mg,rg,rcg,sg,ng) # total likelihood of all features having income >50K 
+  lik_l50<-c(wl,el,ol,ml,rl,rcl,sl,nl) # total likelihood of all features having income <=50K 
+  
+  p_more50<-prod(lik_g50) # Get the product of likelihood for all the features having income >50K
+  p_less50<-prod(lik_l50) # Get the product of likelihood for all the features having income <=50K
+  
+  less_50<-(p_less50*pl50) # Multiply the product of likelihood for all the features having income >50K with the probability of any case having income >50K 
+  more_50<-(p_more50*pg50) # Multiply the product of likelihood for all the features having income <=50K with the probability of any case having income <=50K
+  
+  final_prob_l50<-less_50/(less_50+more_50) #final probability from conditional probability for the given feature to have income <=50K
+  final_prob_l50
+  
+}
+```
+
+4. (30 pts)Predict the binomial class membership for a white female adult who is a federal government worker with a bachelors degree who immigrated from India. Ignore any other features in your model. You must build your own Naive Bayes Classifier -- you may not use a package.
+
+The class membership for a white female adult who is a federal government worker with a bachelors degree who immigrated from India is '<= 50K'
+```{r}
+
+naivebayes1<-function(workclass,column1,education,column2,race,column3,sex,column4,nativecountry,column5) {
+  
+  wg<-workclass[3,column1]  
+  wl<-workclass[4,column1]
+    
+  eg<-education[3,column2]  
+  el<-education[4,column2]
+
+   
+  rcg<-race[3,column3]
+  rcl<-race[4,column3]
+    
+  sg<-sex[3,column4]
+  sl<-sex[4,column4]
+   
+  ng<-nativecountry[3,column5]
+  nl<-nativecountry[4,column5]
+    
+  lik_g50<-c(wg,eg,rcg,sg,ng) 
+  lik_l50<-c(wl,el,rcl,sl,nl) 
+  
+  p_more50<-prod(lik_g50) 
+  p_less50<-prod(lik_l50)
+  
+  less_50<-(p_less50*pl50) 
+  more_50<-(p_more50*pg50) 
+  
+  final_prob_l50<-less_50/(less_50+more_50) 
+  final_prob_l50
+}
+
+naivebayes1(WC_l,' Federal-gov',Ed_l,' Bachelors',Race_l,' White',Sex_l,' Female',
+             NT_l,' India')
+
+# Since the probaility of the unkown case having income <=50K is 0.759, we can classify it as having income <=50K
+```
+
+
+5. (20 pts) Perform 10-fold cross validation on your algorithm to tune it and report the final accuracy results.
+The final accuracy is 75%
+```{r}
+# This does not give the accuracy. This was my effort to do cross validation. I finally ended up using the code of another teammate. Please refer to the next code chunk
+# Probability of class being >50 or <=50K
+t50 <- as.data.frame(unclass(table(df$Class)))
+pg50 <- t50[2,1]/sum(t50[1,1],t50[2,1])
+pl50 <- t50[1,1]/sum(t50[1,1],t50[2,1])
+
+# To make 10-fold cross validations, we need 10 subsets of the data
+set.seed(999)
+index <- createFolds(df$Class, 10, list = T, returnTrain = F)
+# Cross Validation
+for(i in 1:10){
+  train <- df[-index[[i]],]
+  test <- df[index[[i]],]
+  WC <- table(train$Workclass, train$Class)
+  WC <- unclass(WC)
+  Ed <- unclass(table(train$Education, train$Class))
+  MS <- unclass(table(train$`Marital-status`, train$Class))
+  OC <- unclass(table(train$Occupation, train$Class))
+  Rel <- unclass(table(train$Relationship, train$Class))
+  Race <- unclass(table(train$Race, train$Class))
+  Sex <- unclass(table(train$Sex, train$Class))
+  NT <- unclass(table(train$Native,train$Class))
+
+calc <- function(data, c1, c2){
+  train <- data
+  for(i in 1:nrow(train)){
+    c1[i] <- data[i,2]/sum(data[i,1],data[i,2])
+    c2[i] <- data[i,1]/sum(data[i,1],data[i,2])
+  }
+  train <- cbind(data,c1,c2)
+  colnames(train)[3] <- ">50K_ll"
+  colnames(train)[4] <- "<=50K_ll"
+}
+freq <- function(data){
+  c1 <- nrow(data)
+  c2 <- nrow(data)
+  calc(data,c1,c2)
+}
+
+# Adding likelihood to the frequency tables 
+WC_l <- as.data.frame(t(freq(WC)))
+Ed_l <-as.data.frame(t(freq(Ed)))
+MS_l <- as.data.frame(t(freq(MS)))
+OC_l <- as.data.frame(t(freq(OC)))
+Rel_l <- as.data.frame(t(freq(Rel)))
+Race_l <- as.data.frame(t(freq(Race)))
+Sex_l <- as.data.frame(t(freq(Sex)))
+NT_l <- as.data.frame(t(freq(NT)))
+
+  
+prob <- naivebayes1(WC_l,' Federal-gov',Ed_l,' Bachelors',Race_l,' White',Sex_l,' Female',
+             NT_l,' India')
+}
+prob
+# Since I couldn't figure out how to use test cases in my Naive Bayes function, I used Vaishnavi's code for this problem which is in the next chunk.
+```
+```{r}
+#Download the data set Census Income Data for Adults along with its explanation. Explore the data set as you see fit and that allows you to get a sense of the data and get comfortable with it. Is there distributional skew in any of the features? Is there a need to apply a transform?
+
+# getting the data
+data <- file('http://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data')
+income_con <- read.table(data, fileEncoding="UTF-16", header = FALSE, sep = ',', 
+                         col.names = c('age', 'workclass', 'fnlwgt', 'education', 'education-num', 
+                                       'marital-status', 'occupation', 'relationship', 'race', 'sex', 
+                                       'capital-gain', 'capital-loss', 'hours-per-week', 
+                                       'native-country', 'income-level'), stringsAsFactors = FALSE)
+
+
+# extracting the columns with categorical features
+income_cat <- income_con[, c(2, 4, 6:10, 14:15)]
+
+# transforming the income column as a factor feature
+income_cat$income.level <- factor(income_cat$income.level)
+
+
+# removing all the rows with missing values, represented as '?' rather than NA in data
+fin_income <- income_cat[!(income_cat$workclass == ' ?' | income_cat$occupation == ' ?' | 
+                             income_cat$native.country == ' ?'), ]
+
+# structure of the transformed dataset
+str(fin_income)
+
+#Create a frequency and then a likelihood table for the categorical features in the data set. Build your own Naive Bayes classifier for those features.
+
+freq_tbl <- sapply(fin_income[-9], table, fin_income$income.level)
+
+lap_est <- sapply(freq_tbl, function(x) { 
+  apply(x, 1, function(x) { 
+    x + 1})})
+
+# creating a likelihood table by dividing the count with the total sum of that column
+lik_tbl <- sapply(lap_est, function(x) { 
+  apply(x, 1, function(x) { 
+    x / sum(x)})})
+
+# taking a transform of the table to get in the naive bayes classifier form
+lik_tbl <- lapply(lik_tbl, t)
+head(lik_tbl)
+
+
+# building a naive bayes classifier
+
+# this classifier calculates the probabilites of a person's income being
+# less than >50k
+nb <- function(x) {
+  
+  # initializing all the required variables
+  t1 <- 0
+  t2 <- 0
+  li.grt50 <- 0
+  li.lss50 <- 0
+  pr.lss50 <- 0
+  z1 <- list()
+  z2 <- list()
+  y <- list()
+  
+  
+  for (j in 1:nrow(x)) {
+    y[[j]] <- colnames(x[j, ] %>%  select_if(~ !any(is.na(.))))
+  }
+  
+  
+  for (n in 1:nrow(x)) {
+    for (k in 1:length(y[[n]])) {
+      t1[k] <- lik_tbl[[y[[n]][k]]][1, x[n, y[[n]][k]]]
+    }
+    z1[[n]] <- t1
+  }
+  
+  # similarly, getting the likelihood values for income >50k, again by feeding the 
+  # column names
+  for (n in 1:nrow(x)) {
+    for (k in 1:length(y[[n]])) {
+      t2[k] <- lik_tbl[[y[[n]][k]]][2, x[n, y[[n]][k]]]
+    }
+    z2[[n]] <- t2
+  }
+  
+  
+  for (m in 1:length(z1)) {
+    li.lss50[m] <- prod(z1[[m]])
+  }
+  
+  
+  for (l in 1:length(z2)) {
+    li.grt50[l] <- prod(z2[[l]])
+  }
+  
+  
+  for (q in 1:nrow(x)) {
+    pr.lss50[q] <- li.lss50[q]/(li.grt50[q] + li.lss50[q]) 
+  }
+  return(pr.lss50)
+}
+
+#Predict the binomial class membership for a white female adult who is a federal government worker with a bachelors degree who immigrated from India. Ignore any other features in your model.
+
+# the test case
+test <- fin_income[0,-9]
+test[1, ] <- c(' Federal-gov', ' Bachelors', NA, NA, NA, ' White', ' Female', ' India')
+
+# prediciting the binomial class membership for the given case
+nb(test)
+
+
+fin_income2 <- fin_income
+fin_income2$income.level <- if_else(fin_income$income.level == ' >50K', 0, 1)
+
+# predicting the probability of people earning <=50k
+#nb.pred <- nb(fin_income2[-9])
+
+# person with probability >0.5 is determined to be earning >50k
+#nb.pred_class <- ifelse(nb.pred > 0.50, 1, 0)
+
+# checking the accuracy of algorithm
+#confusionMatrix(nb.pred_class, fin_income2$income.level)
+
+
+# cross validation for the predictions
+
+# naive bayes classifier function for cross calidation
+
+nb.cv <- function(x) {
+  
+  # initializing all the required variables
+  t1 <- 0
+  t2 <- 0
+  li.grt50 <- 0
+  li.lss50 <- 0
+  pr.lss50 <- 0
+  z1 <- list()
+  z2 <- list()
+  y <- list()
+  
+  
+  for (j in 1:nrow(x)) {
+    y[[j]] <- colnames(x[j, ] %>%  select_if(~ !any(is.na(.))))
+  }
+  
+  # getting the likelihood values for the case of income <=50k for each row for the
+  # value it has
+  
+  for (n in 1:nrow(x)) {
+    for (k in 1:length(y[[n]])) {
+      t1[k] <- lik_tbl_cv[[y[[n]][k]]][1, x[n, y[[n]][k]]]
+    }
+    z1[[n]] <- t1
+  }
+  
+  # similarly, getting the likelihood values for income >50k, again by feeding the 
+  # column names
+  for (n in 1:nrow(x)) {
+    for (k in 1:length(y[[n]])) {
+      t2[k] <- lik_tbl_cv[[y[[n]][k]]][2, x[n, y[[n]][k]]]
+    }
+    z2[[n]] <- t2
+  }
+  
+  # calculating the overall likelihood value by multiplying the individual likelihoods
+  # when income <=50k
+  for (m in 1:length(z1)) {
+    li.lss50[m] <- prod(z1[[m]])
+  }
+  
+  # calculating the overall likelihood value by multiplying the individual likelihoods
+  # when income >50k
+  for (l in 1:length(z2)) {
+    li.grt50[l] <- prod(z2[[l]])
+  }
+  
+  # transforming the likelihood into probability by dividing with total likelihood
+  for (q in 1:nrow(x)) {
+    pr.lss50[q] <- li.lss50[q]/(li.grt50[q] + li.lss50[q]) 
+  }
+  return(pr.lss50)
+}
+
+# initialize the accuracy vector
+accuracy <- rep(0,6)
+
+for (i in 1:6) {
+  # indices indicate the interval of the test set
+  indices <- (((i-1) * round((1/10)*nrow(fin_income2))) + 1):((i*round((1/10) * nrow(fin_income2))))
+  
+  # training set
+  training <- fin_income[-indices,]
+  
+  # test set
+  testing <- fin_income2[indices,]
+  
+  # building a frequency and a likelihood table from training set
+  freq_tbl_cv <- sapply(training[-9], table, training$income.level)
+  
+  lap_est_cv <- sapply(freq_tbl_cv, function(x) { 
+    apply(x, 1, function(x) { 
+      x + 1})})
+  
+  lik_tbl_cv <- sapply(lap_est_cv, function(x) { 
+    apply(x, 1, function(x) { 
+      x / sum(x)})})
+  
+  lik_tbl_cv <- lapply(lik_tbl_cv, t)
+  
+  # make predictions on the test set using the nb.cv function that takes likelihood
+  # values from training set
+  nb.cv_pred <- nb.cv(testing[-9])
+  
+  nb.cv_pred_class <- ifelse(nb.cv_pred > 0.50, 1, 0)
+  
+  # generate the confusion matrix
+  conf_mat <- table(testing$income.level, nb.cv_pred_class)
+  
+  # assigning the accuracy of this model to the vector
+  accuracy[i] <- sum(diag(conf_mat))/sum(conf_mat)
+}
+
+accuracy
+
+# mean of accuracies 
+mean(accuracy)
+
+```
+
+
+Problem 2 (25 Points)
+
+```{r}
+require(rlang)
+library(readxl)
+require(ggplot2)
+require(car)
+#install.packages('corrplot')
+require(corrplot)
+require(psych)
+#install.packages('rms')
+require(rms)
+#install.packages('sqldf')
+require(sqldf)
+require(reshape2)
+#install.packages('mice')
+require(mice)
+#install.packages('gmodels')
+require(gmodels)
+require(e1071)
+
+uff_raw <- as.data.frame(read_excel('uffidata.xlsx'))
+
+names(uff_raw) <- gsub(x = names(uff_raw), pattern = " ", replacement = "_")  
+colnames(uff_raw)[6] <- "Yrs45"
+
+uff_raw <- uff_raw[-c(1)]
+
+# Analyze the data
+
+str(uff_raw)
+summary(uff_raw)
+
+
+OutVals_Liv = boxplot(uff_raw$Living_Area_SF)$out
+which(uff_raw$Living_Area_SF %in% OutVals_Liv)
+
+OutVals_Lot = boxplot(uff_raw$Lot_Area)$out
+which(uff_raw$Lot_Area %in% OutVals_Lot)
+```
+
+After reading the case study background information, using the UFFI data set, answer these questions:
+1. (5 pts) Are there outliers in the data set? How do you identify outliers and how do you deal with them? Remove them but create a second data set with outliers removed. Keep the original data set.
+```{r}
+#As there are multiple feature and imapcting the dependent variable, we shall use the Cook's distance to find the outliers.
+#Reference: http://r-statistics.co/Outlier-Treatment-With-R.html
+
+Linear_Model_outlier <- lm(Sale_Price ~ ., data=uff_raw)
+
+cooksd <- cooks.distance(Linear_Model_outlier)
+
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")
+abline(h = 4*mean(cooksd, na.rm=T), col="red")
+text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")
+
+influential_outliers <- as.numeric(names(cooksd)[(cooksd > 4*mean(cooksd, na.rm=T))])
+head(uff_raw[influential_outliers, ])
+
+car::outlierTest(Linear_Model_outlier)
+
+#From the observations from the box plot, linear model and the outlier test we will eliminate obervations 21,94,60 or rows (95,97,99 respectively)
+uff_wo_outliers <- uff_raw[-c(95,97,99),]
+```
+
+2. (2 pts) What are the correlations to the response variable and are there colinearities? Build a full correlation matrix.
+```{r}
+## 2.Colinearility
+
+correlation <- cor(uff_wo_outliers)
+correlation
+correlation <- data.frame(as.list(correlation[,2]))
+
+correlation <- melt(correlation)
+correlation$absvalue <- abs(correlation$value)
+sqldf("select * from correlation order by absvalue desc")
+
+pairs.panels(uff_wo_outliers)
+
+```
+
+3. (10 pts) What is the ideal multiple regression model for predicting home prices in this data set using the data set with outliers removed? Provide a detailed analysis of the model, including Adjusted R-Squared, RMSE, and p-values of principal components. Use backward elimination by p-value to build the model.
+```{r}
+## 3.Model
+
+Linear_Model_reg <- lm(Sale_Price ~ ., data=uff_wo_outliers)
+summary(Linear_Model_reg)
+
+#Removing Yrs45
+Linear_Model_reg_1 <- lm(Sale_Price ~ Year_Sold + UFFI_IN + Brick_Ext + Bsmnt_Fin_SF + Lot_Area + Enc_Pk_Spaces + Living_Area_SF + Central_Air + Pool, data=uff_wo_outliers)
+summary(Linear_Model_reg_1)
+
+#Removing Central_Air
+Linear_Model_reg_2 <- lm(Sale_Price ~ Year_Sold + UFFI_IN + Brick_Ext + Bsmnt_Fin_SF + Lot_Area + Enc_Pk_Spaces + Living_Area_SF + Pool, data=uff_wo_outliers)
+summary(Linear_Model_reg_2)
+
+#Removing Brick_Ext
+Linear_Model_reg_3 <- lm(Sale_Price ~ Year_Sold + UFFI_IN + Bsmnt_Fin_SF + Lot_Area + Enc_Pk_Spaces + Living_Area_SF + Pool, data=uff_wo_outliers)
+summary(Linear_Model_reg_3)
+
+#Removing Lot_Area
+Linear_Model_reg_4 <- lm(Sale_Price ~ Year_Sold + UFFI_IN + Bsmnt_Fin_SF + Enc_Pk_Spaces + Living_Area_SF + Pool, data=uff_wo_outliers)
+summary(Linear_Model_reg_4)
+
+Linear_Model_reg_final <- lm(formula=Sale_Price ~ Year_Sold + UFFI_IN + Bsmnt_Fin_SF + Enc_Pk_Spaces + Living_Area_SF + Pool, data=uff_wo_outliers)
+summary(Linear_Model_reg_final)
+
+RMSE <- sqrt(mean((Linear_Model_reg_final$residuals)^2))
+RMSE
+```
+
+4. (3 pts) On average, by how much do we expect UFFI to change the value of a property?
+```{r}
+# 4.Due to the  significance of UFFI index, for every unit of UFFI index, the sales price will be affected by -6.585e+03 units of Sales Price.
+```
+
+5. (5 pts) If the home in question is older than 45 years old, doesn’t have a finished basement, has a lot area of 4000 square feet, has a brick exterior, 1 enclosed parking space, 1480 square feet of living space, central air, and no pool, what is its predicted value and what are the 95% confidence intervals of this home with UFFI and without UFFI?
+
+With UFFI, 95% CI is 148623.9 - 204737.3
+Without UFFI, 95% CI is 155208.9 - 211322.3
+```{r}
+# 5.
+#Yrs45 = 1
+#Bsmnt_Fin_SF = 0
+#Lot_Area = 4000
+#Brick_Ext = 1
+#Enc_Pk_Spaces = 1
+#Living_Area_SF = 1480
+#Central_Air = 1
+#Pool = 0
+
+#Considering Year_Sold as 2018
+
+#Equation form with UFFI
+withuffi <- -1.122e+07 + 5.607e+03*(2018) + -6.585e+03*(1) + 1.449e+01*(0) + 6.762e+03*(1) + 5.512e+01*(1480) + 2.915e+04*(0)
+withuffi
+#Upper Bound
+withuffi + 1.96*(sqrt(deviance(Linear_Model_reg_final)/df.residual(Linear_Model_reg_final)))
+#Lower Bound
+withuffi - 1.96*(sqrt(deviance(Linear_Model_reg_final)/df.residual(Linear_Model_reg_final)))
+  
+  
+#Equation form with UFFI
+woithuffi <- -1.122e+07 + 5.607e+03*(2018) + -6.585e+03*(0) + 1.449e+01*(0) + 6.762e+03*(1) + 5.512e+01*(1480) + 2.915e+04*(0)
+woithuffi
+#Upper Bound
+woithuffi + 1.96*(sqrt(deviance(Linear_Model_reg_final)/df.residual(Linear_Model_reg_final)))
+#Lower Bound
+woithuffi - 1.96*(sqrt(deviance(Linear_Model_reg_final)/df.residual(Linear_Model_reg_final)))
+
+```
+
+Problem 3 (35 Points)
+
+1. (5 pts) Divide the provided Titanic Survival Data into two subsets: a training data set and a test data set. Use whatever strategy you believe it best. Justify your answer.
+```{r}
+## Load CSV Files ##
+
+titanic_raw <- read.csv('titanic_data.csv',header = TRUE)
+
+#titanic_raw <- titanic_raw[-c(1)]
+
+
+str(titanic_raw)
+summary(titanic_raw)
+
+# 1.Data Split
+#Splitting with createDataPartition to have consistent partition of data. 80%-20% is taken so that we have reasonable training data and test data.
+
+titanic_train <- createDataPartition(y=titanic_raw$Survived ,p=0.8, list=F)
+titanic_train_data <- titanic_raw[titanic_train,]
+titanic_test_data <- titanic_raw[-titanic_train,]
+```
+
+2. (10 pts) Impute any missing values for the age variable using an imputation strategy of your choice. State why you chose that strategy and what others could have been used and why you didn't choose them.
+```{r}
+# 2.Imputation using mice
+#Package: mice -> Predictive Mean Matching method
+# THis is used because we need to take into consideration other factors in the data set as well.
+titanic_imp <- titanic_raw
+titanic_imp_subset <- subset(titanic_imp, select=c(Age,Sex,Fare,Parch)) 
+
+imputed_Data <- mice(titanic_imp_subset, m=1,seed = 500, method = "pmm",maxit = 50)
+summary(imputed_Data)
+
+titanic_imp_sorted <- sqldf("select * from titanic_imp order by Age")
+titanic_imp_sorted_NA <- titanic_imp_sorted[1:177,]
+titanic_imp_sorted_notNA <- titanic_imp_sorted[178:891,]
+
+
+titanic_imp_sorted_NA$Age <- imputed_Data$imp$Age[[1]]
+
+titanic_imp <- rbind(titanic_imp_sorted_NA,titanic_imp_sorted_notNA)
+
+titanic_imp <- sqldf("select * from titanic_imp order by PassengerId")
+
+titanic_imp$Embarked[62] <- "S"
+titanic_imp$Embarked[830] <- "S"
+```
+
+3. (10 pts) Construct a logistic regression model to predict the probability of a passenger surviving the Titanic accident. Test the statistical significance of all parameters and eliminate those that have a p-value > 0.05 using stepwise backward elimination.
+```{r}
+# 3. Model Formulation
+
+titanic_train_data <- titanic_train_data[-c(4,9,11)]
+titanic_test_data <- titanic_test_data[-c(4,9,11)]
+titanic_train_data <- na.omit(titanic_train_data)
+titanic_test_data <- na.omit(titanic_test_data)
+
+
+Linear_Model_reg_titanic <- glm(titanic_train_data$Survived~.,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic)
+
+#Removing Embarked
+Linear_Model_reg_titanic_1 <- glm(titanic_train_data$Survived ~ PassengerId + Pclass + Sex + Age + SibSp + Parch + Fare,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic_1)
+
+#Removing Fare
+Linear_Model_reg_titanic_2 <- glm(titanic_train_data$Survived ~ PassengerId + Pclass + Sex + Age + SibSp + Parch,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic_2)
+
+#Removing Parch
+Linear_Model_reg_titanic_3 <- glm(titanic_train_data$Survived ~ PassengerId + Pclass + Sex + Age + SibSp,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic_3)
+
+#Removing PassengerId
+Linear_Model_reg_titanic_4 <- glm(titanic_train_data$Survived ~ Pclass + Sex + Age + SibSp,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic_4)
+
+Linear_Model_reg_titanic_final <- glm(titanic_train_data$Survived ~ Pclass + Sex + Age + SibSp,data=titanic_train_data,family = binomial)
+summary(Linear_Model_reg_titanic_final)
+
+```
+
+4. (5 pts) State the model as a regression equation.
+```{r}
+#Equation
+#y= 5.941125 - 1.375064(Pclass) - -2.664718(Sex) - 0.050312(Age) - 0.452608(SibSp)
+```
+
+5. (5 pts) Test the model against the test data set and determine its prediction accuracy (as a percentage correct).
+```{r}
+# 4.Accuracy
+
+pred <- predict(Linear_Model_reg_titanic_final,titanic_test_data,type = "response")
+pred <- ifelse(pred > 0.5,1,0)
+
+Accuracydata <- as.data.frame(cbind(as.integer(pred),titanic_test_data$Survived))
+Accuracydata <- as.data.frame(Accuracydata)
+colnames(Accuracydata) <- c("Predicted","Actual")
+Accuracydata$accuracy <- ifelse(Accuracydata$Predicted == Accuracydata$Actual, 1,0)
+mean(Accuracydata$accuracy)*100
+```
+Problem 4 (10 Points)
+(10 pts) Elaborate on the use of kNN and Naive Bayes for data imputation. Explain in reasonable detail how you would use these algorithms to impute missing data and why it can work.
+
+kNN:
+kNN is a machine learning algorithm for classification which can also be used for data imputation. It can be used for continuous, discrete, ordinal and categorical data imputation.
+There is an underlying assumption that a point can be approximated by values of the points which are nearest to it, based on other features.
+It matches a given point with its closest neighbours in a multidimensional space based on distances. 
+Distances between different data points are calculated based on distance measures such as the Euclidean, Manhattan, Hamming distance etc. 
+Then the data points are arranged by the distances in a multidimensional space and we consider a given number of closest points(neighbors) for the missing data based on the value of 'k' taken. 
+The selection of k is also quite important. If the value of k is very low, it increases influence of noise and if it is high, it doesn't take local effects in account. Also if the classes are binary, k should be an odd value so that ties can be avoided.
+Then after considering the k nearest neighbors, any of the aggregation methods such as mean, median or mode are used for imputation of the missing data if the data is numeric and mode if it is categorical. 
+
+
+Naive Bayes:
+Naive Bayes is a classifier which is based on Bayesian methods which determines the empirical probabilities of each outcome based on frequencies of each of feature values. It is used for categorical data and if the data is numerical, it is first converted to categorical by binning it.
+When the classifier is then applied to unlabelled cases, it uses the empirical probabilities to predict the most likely case for the unknown class. 
+Naive Bayes uses all the features in the data simultaneously. It makes the assumption that the features are independent of each other. However, even if they are not, Bayes classifier still works really well.
+For classifying missing data using Naive Bayes, frequency tables of all the features are made for all the categories which are present int the dataset which we will be using for imputation.
+From the frequency, likelihoods of each of the values in all the 
+features are calculated to build a likelihood table.
+After doing so, the condidtional probabilities are multiplied and then divided by the total likelihood.
+This transforms each class likelihood into a probability and then based on the probability, imputation of missing data is done by replacing the missing values with the class having highest probability for the same.
+
+Refernces: 
+Lecture Videos and Textbook
+https://towardsdatascience.com/the-use-of-knn-for-missing-values-cf33d935c637
+http://conteudo.icmc.usp.br/pessoas/gbatista/files/his2002.pdf
+
+
+
+
+
+
+
+
+
+

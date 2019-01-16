@@ -1,0 +1,226 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Problem 1 (60 Points)
+
+Download the data set on student achievement in secondary education math education of two Portuguese schools (use the data set Students Math). Using any packages you wish, complete the following tasks:
+1. (10 pts) Create scatter plots and pairwise correlations between age, absences, G1, and G2 and final grade (G3) using the pairs.panels() function in R.
+```{r}
+library(caret)
+library(dplyr)
+#setwd('~/Documents/ML/')
+df <- read.csv("student-mat.csv", sep = ";")
+plt <- df %>% select(3,30,31,32,33)
+pairs(plt)
+```
+
+2. (10 pts) Build a multiple regression model predicting final math grade (G3) using as many features as you like but you must use at least four. Include at least one categorical variables and be sure to properly convert it to dummy codes. Select the features that you believe are useful -- you do not have to include all features.
+
+```{r}
+str(df)
+summary(df$G3)
+hist(df$G3)
+reg_df <- df %>% select(14,31,32,33)
+# Convert paid column to binary
+dfpaid = data.frame(model.matrix(~ paid, data=df))
+pyes <- dfpaid[-1]
+reg_data <- cbind(reg_df, pyes)
+mm <- lm(G3 ~ studytime + G1 + G2 + paidyes, data = reg_data)
+mm
+```
+
+3. (20 pts) Use stepwise backward elimination to remove all non-significant variables and then state the final model as an equation. State the backward elimination measure you applied (p-value, AIC, Adjusted R2). This tutorial shows how to use various feature elimination techniques.
+
+The backward elimination measure applied was AIC.
+
+Formula: G3 = 0.72153034 + schoolMS(0.51) + Fjobservices(-0.44) + reasonhome(-0.32) + activitiesyes(-0.3) + 
+    romanticyes(-0.31) + age(-0.26) + famrel(0.4) + Walc(0.13) + absences(0.05) + G1(0.17) + G2(0.97)
+```{r}
+dum_ft <- data.frame(model.matrix(~ school+sex+address+famsize+Pstatus+Mjob+Fjob+reason+guardian+schoolsup+famsup+paid+activities+nursery+higher+internet+romantic, data=df))
+num_ft <- df %>% select(3,7,8,13,14,15,c(24:33))
+final_df <- cbind(dum_ft,num_ft)
+# Apply AIC backward elimination measure
+# Commenting it out so as not to print it all in the pdf file
+# step(lm(G3 ~ schoolMS+sexM+addressU+famsizeLE3+PstatusT+     Mjobhealth+Mjobother+Mjobservices+Mjobteacher+Fjobhealth+Fjobother  +Fjobservices+Fjobteacher+reasonhome+reasonother+reasonreputation+guardianmother+ 
+# guardianother+schoolsupyes+famsupyes+paidyes+activitiesyes+nurseryyes+    
+# higheryes+internetyes+romanticyes+age+Medu+Fedu+
+# traveltime+studytime+failures+famrel+freetime+goout+           
+# Dalc+Walc+health+absences+G1+G2, data = final_df),direction = "backward")
+
+```
+
+4. (10 pts) Calculate the 95% confidence interval for a prediction -- you may choose any data you wish for some new student.
+
+The 95% confidence interval for the prediction is 8.04 to 11.72
+```{r}
+
+#Prediction = 0.72153034 + schoolMS(+0.51) + Fjobservices(-0.44) + reasonhome(-0.32) + activitiesyes(-0.3) + 
+#    romanticyes(-0.31) + age(-0.26) + famrel(0.4) + Walc(0.13) + absences(0.05) + G1(0.17) + G2(0.97)
+Prediction = 0.72153034 + 1*(+0.51) + 1*(-0.44) + 0*(-0.32) + 1*(-0.3) + 
+    0*(-0.31) + 16*(-0.26) + 4*(0.4) + 3*(0.13) + 10*(0.05) + 8*(0.17) + 10*(0.97)
+Prediction
+# Initializing columns of prediction and absolute error
+final_df$P<-0
+final_df$absErr<-0
+# Making predictions and calculating absolute error
+for (i in 1:nrow(final_df)){
+  final_df$P[i] <- 0.51*final_df$schoolMS[i]+(-0.44)*final_df$Fjobservices[i]+(-0.32)*final_df$reasonhome[i]+(-0.3)*final_df$activitiesyes[i]+(-0.31)*final_df$romanticyes[i]+(-0.26)*final_df$age[i]+(0.4)*final_df$famrel[i]+(0.13)*final_df$Walc[i]+(0.05)*final_df$absences[i]+(0.17)*final_df$G1[i]+(0.97)*final_df$G2[i] + 0.72153034
+  final_df$P[i] <- round(final_df$P[i])
+  final_df$absErr[i] <-abs(final_df[i,43]-final_df$P[i])
+}
+# Calculating MAD
+MAD <- mean(final_df$absErr)
+MAD
+
+# Prediction with a 95% prediction interval
+D <- 0.8*MAD
+D
+
+CI1 <- Prediction - (1.96*D)
+CI1
+CI2 <- Prediction + (1.96*D)
+CI2
+```
+
+5. (10 pts) What is the RMSE for this model -- use the entire data set for both training and validation. You may find the residuals() function useful. Alternatively, you can inspect the model object, e.g., if your model is in the variable m, then the residuals (errors) are in m$residuals and your predicted values (fitted values) are in m$fitted.values.
+
+The RMSE for this model is 1.85
+```{r}
+# Making a column for squared error
+final_df$SqErr <- 0
+# Putting values in the column
+for (i in 1:nrow(final_df)){
+  final_df$SqErr[i] <- (final_df$absErr[i])^2
+}
+head(final_df)
+# Calculating RMSE
+RMSE <- sqrt(mean(final_df$SqErr))
+RMSE
+
+```
+
+Problem 2 (40 Points)
+
+For this problem, the following short tutorial might be helpful in interpreting the logistic regression output.
+1. (5 pts) Using the same data set as in Problem (1), add another column, PF -- pass-fail. Mark any student whose final grade is less than 10 as F, otherwise as P and then build a dummy code variable for that new column. Use the new dummy variable column as the response variable.
+```{r}
+df$PF <- 'F'
+for (i in 1:nrow(df)){
+  if (df$G3[i] <= 9) {
+    df$PF[i] <- "F"
+  }
+  else {
+    df$PF[i] <- "P"
+  }
+}
+head(df$PF)
+
+dPF <- data.frame(model.matrix(~ PF, data=df))
+dPF <- dPF[-1]
+
+df <- cbind(df,dPF)
+```
+
+2. (10 pts) Build a binomial logistic regression model classifying a student as passing or failing. Eliminate any non-significant variable using an elimination approach of your choice. Use as many features as you like but you must use at least four -- choose the ones you believe are most useful.
+```{r}
+f_df <- final_df %>% select(c(2:43))
+f_df <- cbind(f_df,dPF)
+# Select the significant variables using info gained from the previous backward elimination measure
+# Apply AIC backward elimination measure
+f_g3 <- f_df[-42]
+#step(glm(PFP~.,data = f_g3),direction = "backward") Commented it out so as not to print 20 pages in the pdf file
+
+#Logistic Regression Model
+model <- glm(PFP ~Fjobother+ nurseryyes+ age+ failures+ famrel+ goout+ Walc+ absences+ G1 + G2, data = f_g3 , family = "binomial")
+
+```
+
+3. (5 pts) State the regression equation.
+
+Formula: Prediction = (1.95)Fjobother + (-1.16)nurseryyes + (-0.59)age + (0.22)failures + (1.22)famrel +(-0.78)goout + (0.8)Walc + (-0.06)absences + (0.41)G1 + (2.26)G2 -18.52
+
+```{r}
+model
+summary(model)
+```
+
+
+4. (20 pts) What is the accuracy of your model? Use the entire data set for both training and validation.
+
+Accuracy of the model is 94.17%
+```{r}
+f_g3$Pred<-0
+f_g3$Pred <- predict(model, data = f_g3, type = 'response')
+f_g3$Pred_f <- 0
+for (i in 1:nrow(f_g3)){
+  if (f_g3$Pred[i] <= 0.4) {
+    f_g3$Pred_f[i] <- "0"
+  }
+  else {
+    f_g3$Pred_f[i] <- "1"
+  }
+}
+
+f_g3$Pred_f <- as.numeric(f_g3$Pred_f)
+f_g3$Pred_f <- as.factor(f_g3$Pred_f)
+f_g3$PFP <- as.factor(f_g3$PFP)
+confusionMatrix(f_g3$Pred_f, f_g3$PFP)
+```
+
+Problem 3 (10 Points)
+
+1. (8 pts) Implement the example from the textbook on pages 205 to 217 for the data set on white wines.
+```{r}
+library(rpart)
+#install.packages("rpart.plot")
+library(rpart.plot)
+library(RWeka)
+wine <- read.csv("whitewines.csv")
+str(wine)
+hist(wine$quality)
+# Divide into training and testing datasets
+wine_train <- wine[1:3750, ]
+wine_test <- wine[3751:4898, ]
+# Train the model
+m.rpart <- rpart(quality ~ ., data = wine_train)
+m.rpart
+rpart.plot(m.rpart, digits = 3)
+rpart.plot(m.rpart, digits = 4, fallen.leaves = TRUE,
+type = 3, extra = 101)
+# Evaluate model performance
+p.rpart <- predict(m.rpart, wine_test)
+summary(p.rpart)
+summary(wine_test$quality)
+cor(p.rpart, wine_test$quality)
+# Measuring mean absolute error
+MAE <- function(actual, predicted) {
+mean(abs(actual - predicted))
+}
+MAE(p.rpart, wine_test$quality)
+mean(wine_train$quality)
+# Predicting value of 5.78 for every wine sample, MAE is :
+MAE(5.87, wine_test$quality)
+# Improve model performance
+m.m5p <- M5P(quality ~ ., data = wine_train)
+summary(m.m5p) # Terribly poor results which don't match with the text book
+p.m5p <- predict(m.m5p, wine_test)
+summary(p.m5p)
+cor(p.m5p, wine_test$quality)
+MAE(wine_test$quality, p.m5p)
+```
+
+2. (2 pts) Calculate the RMSE for the model.
+
+The RMSE for the model is 0.71
+```{r}
+# Measuring root mean squared error
+RMSE <- function(actual, predicted) {
+sqrt(mean((actual - predicted)^2))
+}
+RMSE(wine_test$quality, p.rpart)
+```
+
